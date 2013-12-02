@@ -88,7 +88,9 @@ class Controller
                 is_active = JSON.parse is_active.body 
                 is_active = is_active["droplet"]
                 if is_active["status"] == "active"
-                    puts "server active!"
+                     
+
+
                     @active = 1
                 end
                 @count = 0
