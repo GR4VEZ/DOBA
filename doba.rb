@@ -558,30 +558,12 @@ class DobaDemo < Gtk::Window
                 end    
                 if gate == 1
                     if @snaps.active_text == "New Snapshot"
-                        #if gate == 1
-                        #@snaps.active_text == "New Snapshot"
-                        #puts "New Server: #{@snapshot_name.text} made and saving data!"
-                        #call controller function passing name and size id
-                        #controller function calls api model function
-                        #api function creates server
-                    
-                        #snap_size = nil 
                         snap_region = nil
-
-                        #@sizeid_snaps.each do |s|
-                        #    if @snapsize_box.active_text == s["name"]
-                        #        snap_size = s["id"]    
-                        #    end
-                        #end
                         @regionid_snaps.each do |s|
                             if @snaploc_box.active_text == s["name"]
                                 snap_region = s["id"]
                             end
                         end
-
-                        #snapname = "DOBA: " + @snapshot_name.text
-                        #@user.create_backup iter[1]
-                        #@user.create_backup snapname, snap_size, @server_id, snap_region
                         rowref= Gtk::TreeRowReference.new(dir_store, 
                                 Gtk::TreePath.new("#{dir_view.selection.selected}"))
                         iter = rowref.model.get_iter(rowref.path)

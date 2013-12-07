@@ -1,6 +1,7 @@
 #!/usr/bin/env ruby
 require 'net/http'
 require 'uri'
+require 'json'
 
 class Api_model
 
@@ -27,10 +28,9 @@ class Api_model
     end
     
     def calculate_size sighz
-        res = drpsizes
-        res = JSON.parse res.body 
-        res = res["sizes"]
-        res.each do |size|
+        drop_sizes = drpsizes
+        drop_sizes = drop_sizes["sizes"]
+        drop_sizes.each do |size|
             if (size["disk"].to_i * 1073741824) > sighz
                 return size
             end
@@ -79,12 +79,8 @@ class Api_model
     end
 
     def add_key ssh_key, user_name
-        #path = "#{API_BASE_URL}/ssh_keys/new/?name=#{user_name}&ssh_pub_key=#{ssh_key}&#{@client_path}"
         sshkey_path = "/ssh_keys/new/?name=#{user_name}&ssh_pub_key=#{ssh_key}&#{@client_path}"
         returnhash sshkey_path 
-        #system( "curl '#{path}'")
-        #sshkey_path = "/ssh_keys/?clien
-        #https://api.digitalocean.com/ssh_keys/?client_id=[your_client_id]&api_key=[your_api_key]
     end
 
     def returnhash path
@@ -92,6 +88,11 @@ class Api_model
         http                = Net::HTTP.new(uri.host, uri.port)
         http.use_ssl        = true
         http.verify_mode    = OpenSSL::SSL::VERIFY_NONE
-        res                 = http.get(uri.request_uri)
+        begin
+            res             = http.get(uri.request_uri)
+        rescue
+            return "network error"
+        end
+        res                 = JSON.parse res.body
     end
 end

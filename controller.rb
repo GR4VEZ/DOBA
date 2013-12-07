@@ -2,7 +2,6 @@
 require_relative 'api_model'
 require_relative 'dir_model'
 require_relative 'db_model'
-require 'json'
 require 'pathname'
 
 class Type
@@ -65,91 +64,114 @@ class Controller
         set_client_data image, Type::IMG_ID
         set_client_data region, Type::REG_ID     
         set_client_data @database.return_key( @user_info[ "user_id"]), Type::SSH_KEY
+        
         directory = Dir_model.new( Dir.home())
         size = directory.filesize path
-        puts path
-        @allfiles = directory.all_files path 
         do_api = Api_model.new @client
         size = do_api.calculate_size size
+       
+        #network error catch 
+        if size == "network error"
+            #network flag
+        elsif size == 0
+            #filesize too large
+        end
+        
         size = size[ "id"]
         set_client_data size, Type::SIZE_ID
         do_api = Api_model.new @client
-        res = do_api.createdrp
-        res = JSON.parse res.body
-        puts res
-        res = res["droplet"]
-        puts res
-        #puts res["id"]
-        set_client_data res["id"], Type::DRP_NUM
+        new_droplet = do_api.createdrp
+        
+        #network error catch 
+        if new_droplet == "network error"
+            #network flag
+        end
+
+        new_droplet = new_droplet["droplet"]
+        set_client_data new_droplet["id"], Type::DRP_NUM
         set_client_data "my_images", Type::IMG_FLTR
         do_api = Api_model.new @client
+        
         @count = 0
         @active = 0
         while @active == 0 
             @count = @count + 1
             if @count == 110000000
                 is_active = do_api.drp_status
-                is_active = JSON.parse is_active.body 
+                
+                #network error catch 
+                if is_active == "network error"
+                    #network flag
+                end
+                
                 is_active = is_active["droplet"]
                 if is_active["status"] == "active"
                     if !(File.exist?("./mnt"))
                         Dir.new "./mnt"
                     end
-                    #puts "sshfs -o StrictHostKeyChecking=no root@#{is_active["ip_address"]}:/ ./mnt"
-                    #`sshfs -o StrictHostKeyChecking=no root@#{is_active["ip_address"]}:/ ./mnt`
+                   
                     ip = is_active["ip_address"]
                     ip = ip.to_s
-                    #puts ip
-                    #puts "sshfs"
-                    sshfs = "sshfs -o StrictHostKeyChecking=no -o sshfs_debug -o reconnect root@#{ip}:/ ./mnt"
-                     
-                    systest = system "#{sshfs}"
-                    #while systest == false
-                    #    puts "test"
-                    #end
-                    while systest != true
-                        if systest == false
-                            systest = system "#{sshfs}"
+                    sshfs = "sshfs -o StrictHostKeyChecking=no root@#{ip}:/ ./mnt"
+                    sshfs_test = system "#{sshfs} > /dev/null"
+                    while sshfs_test != true
+                        if sshfs_test == false
+                            sshfs_test = system "#{sshfs} > /dev/null"
                         end
                     end
 
-                    @mountcount = 0 
-                    while @mountcount < 100000000 
-                        @mountcount = @mountcount + 1
-                    end
-                    
                     pn = Pathname.new "./mnt"
                     while !pn.mountpoint?
                     end
-                    #temper = `ls ./mnt`
-                    #puts temper
+                    
                     if !(File.exist?("./mnt/home/backup"))
                         system "mkdir ./mnt/home/backup"
                     end
             
-                    #mount_fuldir = Dir.pwd + "/mnt"
-                   
-                    #system "tar -cf #{name} --exclude=#{mount_fuldir} #{path}"
-                    system "tar czf \"#{name}.tar.gz\" --exclude=\"#{name}.tar.gz\" --exclude=\"./mnt\" #{path}"
-                    system "mkdir ./mnt/home/backup/\"#{name}\""
+                    tar = "tar czf \"#{name}.tar.gz\" --exclude=\"#{name}.tar.gz\" --exclude=\"./mnt\" #{path}"
+                    system "#{tar} > /dev/null"
+                    mnt = "mkdir ./mnt/home/backup/\"#{name}\""
+                    system "#{mnt}"
                     dt = DateTime.now
-                    t = system "cp \"./#{name}.tar.gz\" ./mnt/home/backup/\"#{name}\"/\"#{name}#{dt}.tar.gz\""
-                    while !t
+                    cpy = "cp \"./#{name}.tar.gz\" ./mnt/home/backup/\"#{name}\"/\"#{name}#{dt}.tar.gz\""
+                    copy_timer = system "#{cpy} > /dev/null"
+                    while !copy_timer
                     end
                     
+                    size_of_snap = system "du -ch 2> /dev/null | grep total"
+                    while !size_of_snap
+                    end    
+    
                     system "umount ./mnt"
-                    do_api.poweroff
-                        
+                    droplet_off = do_api.poweroff
+
+                    #network error catch 
+                    if droplet_off == "network error"
+                        #network flag
+                    end
+
                     @power_timer = 0
                     @power_count = 0
                     while @power_timer == 0
                         @power_count = @power_count + 1
                         if @power_count == 110000000 
                             power_finished = do_api.drp_status
-                            power_finished = JSON.parse power_finished.body 
+                    
+                            #network error catch 
+                            if power_finished == "network error"
+                                #network flag
+                            end
+
                             power_finished = power_finished["droplet"]
                             if power_finished[ "status"] == "off"
-                                do_api.snpshot name
+                                @snapshot_name = "DOBA: #{name} #{regionname} #{snapshot_size}"
+                                take_snap = do_api.snpshot @snapshot_name
+                                
+                                #network error catch 
+                                if take_snap == "network error"
+                                    #network flag
+                                end
+
                                 @power_timer = 1
                             end                                    
                         end
@@ -161,66 +183,55 @@ class Controller
                         @snap_count = @snap_count + 1
                         if @snap_count == 110000000
                             snap_finished = do_api.images
-                            snap_finished = JSON.parse snap_finished.body 
+                            
+                            #network error catch 
+                            if snap_finished == "network error"
+                                #network flag
+                            end
+    
                             snap_finished = snap_finished["images"]
                             snap_finished.each do |snap|
-                                #puts snap[ "name"]
                                 if snap[ "name"] == name
-                                    res = do_api.dstrydrp
-                                    puts res.body
+                                    destroyed == false
+                                    while destroyed == false
+                                        destr_drop = do_api.dstrydrp
+                            
+                                        #network error catch 
+                                        if destr_drop == "network error"
+                                            #network flag
+                                        end
+    
+                                        server_destroyed = do_api.droplets
+                                        
+                                        #network error catch 
+                                        if server_destroyed == "network error"
+                                            #network flag
+                                        end
+
+                                        server_destroyed = server_destroyed[ "droplets"]
+                                        found = false
+                                        server_destoryed.each do |drop|
+                                            if drop[ "name"] == @snapshot_name
+                                                found = true 
+                                            end
+                                        end
+                                        if found == false
+                                            destroyed = true 
+                                        end
+                                    end
                                     @snap_timer = 1
                                 end                                    
                             end
                             @snap_count = 0
                         end
                     end
+                    
                     system "rm \"#{name}.tar.gz\""
-
-                    #do_api.
-                    #system "cd ./mnt/home/backup/\"#{name}\" | tar xzf \"#{name}.tar.gz\""
-                     
- 
-=begin
-                    system "find #{Dir.home()} 
-                            -mindepth 1 
-                            -maxdepth 1 
-                            -name 'mnt' 
-                            -or 
-                            -exec cp 
-                            -r {} #{path} \;"
-=end
-    
-=begin
-                    @copytimer = 0    
-                    @allfiles.each do |dirpath|
-                        copy = system "gcp --parents \"#{dirpath}\" \"./mnt/home/backup#{dirpath}\""
-                        while !copy
-                            @copytimer = @copytimer + 1
-                        end
-                        puts "took " + @copytimer + " cycles to copy " + dirpath
-                        puts " "
-                        @copytimer = 0 
-                    end
-
-                    if FileTest.directory? path     
-                        test = system "cp -r #{path}/* ./mnt/home/backup" 
-                    else
-                        test = system "cp #{path} ./mnt/home/backup" 
-                    end
-                    
-                    while !test                    
-                    end    
-=end
-
-                    #confirm = `ls ./mnt/home/backup`
-                    #puts confirm
-                    
                     @active = 1
                 end
                 @count = 0
             end
         end
-        puts "finished"
     end
 
     def print_images image_type
@@ -229,34 +240,21 @@ class Controller
         set_client_data @user_info[ "api_key"], Type::API_KEY
         model = Api_model.new @client
         images = model.images     
-        res = JSON.parse images.body 
+        #network error catch 
+        if new_droplet == "network error"
+            #network flag
+        end
     end
 
-=begin    
-    def print_imageinfo imageid
-        set_client_data image_type, Type::IMG_FLTR
-        set_client_data @user_info[ "client_id"], Type::CLIENT
-        set_client_data @user_info[ "api_key"], Type::API_KEY
-        model = Api_model.new @client
-        images = model.images     
-        res = JSON.parse images.body 
-    end
-=end
-
-=begin
-    def print_droplets
-        model = Api_model.new @client
-        droplets = model.droplets
-        puts droplets.body
-    end
-=end
-    
     def print_regions
         set_client_data @user_info[ "client_id"], Type::CLIENT
         set_client_data @user_info[ "api_key"], Type::API_KEY
         model = Api_model.new @client
         regions = model.regions
-        res = JSON.parse regions.body 
+        #network error catch 
+        if new_droplet == "network error"
+            #network flag
+        end
     end
 
     def print_drpsizes
@@ -264,7 +262,10 @@ class Controller
         set_client_data @user_info[ "api_key"], Type::API_KEY
         model = Api_model.new @client
         sizes = model.drpsizes
-        res = JSON.parse sizes.body 
+        #network error catch 
+        if new_droplet == "network error"
+            #network flag
+        end
     end
 
     def user_exist user_name
@@ -285,10 +286,13 @@ class Controller
         public_key = public_key.gsub "+", "%2B"
         public_key = public_key.delete "\n"
         key_id = model.add_key public_key, @user_info[ "user_name"]
-        res = JSON.parse key_id.body
-        res = res[ "ssh_key"]
-        res = res[ "id"]
-        @database.add_key res, @user_info[ "user_id"]
+        #network error catch 
+        if new_droplet == "network error"
+            #network flag
+        end
+        key_id = key_id[ "ssh_key"]
+        key_id = key_id[ "id"]
+        @database.add_key key_id, @user_info[ "user_id"]
     end 
     
     def create_user user_name, password, api_key, client_id
