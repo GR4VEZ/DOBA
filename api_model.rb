@@ -68,8 +68,13 @@ class Api_model
         returnhash images_path
     end
 
-    def snpshot
-        snapshot_path = "/droplets/#{@dropletnum}/snapshot/?name=#{@servername}&#{@client_path}"
+    def poweroff
+        poweroff_path = "/droplets/#{@dropletnum}/power_off/?#{@client_path}"
+        returnhash poweroff_path
+    end
+
+    def snpshot snap_name
+        snapshot_path = "/droplets/#{@dropletnum}/snapshot/?name=#{snap_name}&#{@client_path}"
         returnhash snapshot_path
     end
 

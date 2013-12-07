@@ -80,11 +80,15 @@ class Dir_model
             if !FileTest.directory? path
                 @file_array << path
             else 
-                Dir.glob(path + "/*").each do |path|
-                    if FileTest.directory? path
-                        files_rec path   
-                    else
-                        @file_array << path
+                if path.include? "/mnt"
+                    return
+                else
+                    Dir.glob(path + "/*").each do |path|
+                        if FileTest.directory? path
+                            array_rec path   
+                        else
+                            @file_array << path
+                        end
                     end
                 end
             end
@@ -92,5 +96,4 @@ class Dir_model
             return
         end
     end
-
 end
