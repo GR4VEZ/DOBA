@@ -156,6 +156,9 @@ class DobaDemo < Gtk::Window
             
             signout.signal_connect "clicked" do |w|
                 @user.sign_out
+                #@snapsflag = 0
+                #@snapsstore = Array.new 
+                #@personal_snaps = Array.new
                 @menuframe.remove @menu
                 menubar "loggedout"
                 @bodyframe.remove @body 
@@ -431,9 +434,7 @@ class DobaDemo < Gtk::Window
             @snaps = Gtk::ComboBox.new
             user_body.attach @snaps, 4, 5, 3, 4, Gtk::FILL, Gtk::SHRINK, 0, 0
             @snaploc_label = Gtk::Label.new "Snapshot location"
-            user_body.attach @snaploc_label, 4, 5, 10, 11, Gtk::FILL, Gtk::SHRINK, 0, 0
             @snaploc_box = Gtk::ComboBox.new
-            user_body.attach @snaploc_box, 4, 5, 11, 12, Gtk::FILL, Gtk::SHRINK, 0, 0
             
             @splitmidtop = Gtk::HBox.new
             
@@ -450,14 +451,15 @@ class DobaDemo < Gtk::Window
              
             @snapshot_label = Gtk::Label.new "New Snapshot Name"
             @snapshot_name = Gtk::Entry.new
-            
+           
             if @snapsflag == 0 
                 Thread.new{ snapshots()} 
+                @snapsflag = 1
             else
                 store = Gtk::ListStore.new(String)
                 @snapsstore.each_with_index do |e|
                     iter = store.append
-                    iter[0]   = e
+                    iter[0] = e
                 end  
                 @snaps.model = store
             end
@@ -467,9 +469,11 @@ class DobaDemo < Gtk::Window
                 res = @user.print_images "my_images"
                 res["images"].each do |w|
                     if w["name"].include? "DOBA:"
-                        @snapsstore << w["name"][ 6, w["name"].length]
+                        snap_name_array = Array.new
+                        snap_name_array = w["name"].split " "
+                        @snapsstore << snap_name_array[1]
                         @personal_snaps << w
-                        @snaps.append_text w["name"][ 6, w["name"].length]
+                        @snaps.append_text snap_name_array[1]
                     end
                 end
                 @snaps.append_text "New Snapshot"
@@ -478,7 +482,7 @@ class DobaDemo < Gtk::Window
                 count = 0;
                 res["images"].each do |w|
                     if w["distribution"] == "Ubuntu" && count == 0
-                        @server_id = w["id"]
+                        @new_snapshot_id = w["id"]
                         count = count + 1
                     end
                 end
@@ -486,6 +490,7 @@ class DobaDemo < Gtk::Window
 
             if @locflag == 0 
                 Thread.new{ newsnap()} 
+                @locflag = 1
             else
                 store = Gtk::ListStore.new(String)
                 @locstore.each_with_index do |e|
@@ -519,6 +524,8 @@ class DobaDemo < Gtk::Window
                 if @snaps.active_text == "New Snapshot"
                     user_body.attach @snapshot_label, 4, 5, 6, 7, Gtk::FILL, Gtk::SHRINK, 0, 0
                     user_body.attach @snapshot_name, 4, 5, 7, 8, Gtk::FILL, Gtk::SHRINK, 0, 0
+                    user_body.attach @snaploc_label, 4, 5, 10, 11, Gtk::FILL, Gtk::SHRINK, 0, 0
+                    user_body.attach @snaploc_box, 4, 5, 11, 12, Gtk::FILL, Gtk::SHRINK, 0, 0
                     show_all
                 else
                     user_body.each do |child|   
@@ -531,6 +538,8 @@ class DobaDemo < Gtk::Window
                     if @flag == 1
                         user_body.remove @snapshot_label
                         user_body.remove @snapshot_name
+                        user_body.remove @snaploc_label
+                        user_body.remove @snaploc_box
                         show_all
                         @flag = 0
                     end
@@ -545,8 +554,10 @@ class DobaDemo < Gtk::Window
                     gate = 0 
                 end
                 if !@snaploc_box.active_text
-                    puts "Please select a server location"
-                    gate = 0
+                    if @snaps.active_text == "New Snapshot"
+                        puts "Please select a server location"
+                        gate = 0
+                    end
                 end
                 if !dir_view.selection.selected
                     puts "Please select a file or directory"
@@ -558,42 +569,62 @@ class DobaDemo < Gtk::Window
                 end    
                 if gate == 1
                     if @snaps.active_text == "New Snapshot"
+                        region_name = nil
                         snap_region = nil
                         @regionid_snaps.each do |s|
                             if @snaploc_box.active_text == s["name"]
+                                region_name = s["name"] 
+                                region_name = region_name.gsub(/\s+/,"")
                                 snap_region = s["id"]
                             end
                         end
                         rowref= Gtk::TreeRowReference.new(dir_store, 
                                 Gtk::TreePath.new("#{dir_view.selection.selected}"))
                         iter = rowref.model.get_iter(rowref.path)
-                        @user.create_backup @snapshot_name.text, @server_id, snap_region, iter[1]
+                        @s_name = @snapshot_name.text.gsub(/[^0-9a-z]/i,"")
+                        puts @user.create_backup @s_name, @new_snapshot_id, snap_region, region_name, iter[1]
+                        @snapsflag = 0
+                        @snapsstore = Array.new 
+                        @personal_snaps = Array.new
+                        @bodyframe.remove @body 
+                        body "backup"     
                     else
-                        #puts "#{@combox.active_text} spun up and saving data!" 
-                        #check server for enough space (need ssh access)
-                            #if not enough space (compare the ammount of space for the selected data and the drive)
-                                #calculate space needed
-                                #check if there is a server space viable for upload
-                                    #if yes execute space upgrade
-                                    #else, throw error 
-                        #@personal_snaps.each do |s|
-                        #    if @snaps.active_text == s["name"][ 6, s["name"].length]
-                        #        puts s["id"]    
-                        #        #restore = s["id"]    
-                        #    end
-                        #end
-                        #rowref= Gtk::TreeRowReference.new(dir_store, 
-                        #        Gtk::TreePath.new("#{dir_view.selection.selected}"))
+                        region_name = nil
+                        snap_region = nil
+                        snap_selected = @snaps.active_text
+                        @personal_snaps.each do |snap|
+                            snap_name_array = Array.new
+                            snap_name_array = snap["name"].split " "
+                            if snap_name_array[1] == snap_selected 
+                                @new_snap_name = Array.new
+                                @new_snap_name = snap["name"].split " "
+                                @old_snap_id = snap["id"]
+                                regions = @user.print_regions
+                                regions = regions["regions"]
+                                regions.each do |region|
+                                    regs = region["name"]
+                                    regs = regs.gsub(/\s+/,"")
+                                    if snap_name_array[2] == regs
+                                        snap_region = region["id"]     
+                                    end 
+                                end
+                            end
+                        end
+   
+                        rowref= Gtk::TreeRowReference.new(dir_store, 
+                                Gtk::TreePath.new("#{dir_view.selection.selected}"))
+                        iter = rowref.model.get_iter(rowref.path)
 
-                        #iter = rowref.model.get_iter(rowref.path)
-                        #puts iter[1]
-                        #@user.restore_backup ?
+                        #call the creation option that suits the need of this case
+                        puts @user.update_backup @new_snap_name, @old_snap_id, snap_region, iter[1]
+
+                        #refresh page after backup
+                        @bodyframe.remove @body 
+                        body "backup"     
                     end
                 end
             end 
         
-        @snapsflag = 1
-        @locflag = 1
         end 
         
         return user_body 

@@ -67,6 +67,11 @@ class Api_model
         images_path = "/images/?#{@client_path}&filter=#{@images_filter}"
         returnhash images_path
     end
+    
+    def delete_img snap_id 
+        deleteimg_path = "/images/#{snap_id}/destroy/?#{@client_path}"
+        returnhash deleteimg_path
+    end
 
     def poweroff
         poweroff_path = "/droplets/#{@dropletnum}/power_off/?#{@client_path}"
@@ -77,7 +82,7 @@ class Api_model
         snapshot_path = "/droplets/#{@dropletnum}/snapshot/?name=#{snap_name}&#{@client_path}"
         returnhash snapshot_path
     end
-
+    
     def add_key ssh_key, user_name
         sshkey_path = "/ssh_keys/new/?name=#{user_name}&ssh_pub_key=#{ssh_key}&#{@client_path}"
         returnhash sshkey_path 
