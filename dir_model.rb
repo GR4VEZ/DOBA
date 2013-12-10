@@ -17,7 +17,9 @@ class Dir_model
     def add_subfiles file 
         if !(file.first_child and file.first_child[0])
             Dir.glob(file[1] + "/*").each do |path|
-                add_file file, path
+                if !path.include? "Library"
+                    add_file file, path
+                end
             end
             @model.remove file.first_child
         end

@@ -14,8 +14,10 @@ class DobaDemo < Gtk::Window
         set_default_size 600, 400
         set_border_width 2
         set_window_position Gtk::Window::POS_CENTER
+        @restoreflag = 0
         @snapsflag = 0
         @locflag = 0
+        @restorestore = Array.new
         @snapsstore = Array.new
         @locstore = Array.new
 
@@ -138,17 +140,17 @@ class DobaDemo < Gtk::Window
             
             restore.signal_connect "clicked" do |w|
                 @bodyframe.remove @body 
-                body "backup"     
+                body "restore"     
             end
         
-        settings = Gtk::Button.new "Settings"
-        settings.set_size_request 60, 25
-        user_menu.attach settings, 4, 5, 0, 1, Gtk::FILL, Gtk::SHRINK, 0, 0
+        #settings = Gtk::Button.new "Settings"
+        #settings.set_size_request 60, 25
+        #user_menu.attach settings, 4, 5, 0, 1, Gtk::FILL, Gtk::SHRINK, 0, 0
             
-            settings.signal_connect "clicked" do |w|
-                @bodyframe.remove @body 
-                body "backup"     
-            end
+        #    settings.signal_connect "clicked" do |w|
+        #        @bodyframe.remove @body 
+        #        body "backup"     
+        #    end
         
         signout = Gtk::Button.new "Sign out"
         signout.set_size_request 60, 25
@@ -185,7 +187,11 @@ class DobaDemo < Gtk::Window
             @bodyframe.add @body
             show_all
         elsif user_state == "backup"
-            @body = backup 
+            @body = body_backup 
+            @bodyframe.add @body
+            show_all
+        elsif user_state == "restore"
+            @body = body_restore
             @bodyframe.add @body
             show_all
         else
@@ -387,7 +393,33 @@ class DobaDemo < Gtk::Window
         return user_body 
     end
 
-    def backup 
+    def body_backing 
+        user_body = Gtk::Table.new 19, 6, false
+        
+        waiting = Gtk::Image.new "imgs/backup.gif" 
+        user_body.attach waiting, 2, 4, 10, 11, Gtk::FILL, Gtk::SHRINK, 0, 0
+    
+        leftspace = Gtk::VBox.new
+        user_body.attach leftspace, 0, 2, 0, 19
+
+        rightspace = Gtk::VBox.new
+        user_body.attach rightspace, 4, 6, 0, 19
+    
+        Thread.new{ backing_reload()} 
+        def backing_reload 
+            while @backing == 1
+            end
+
+            @snapsflag = 0
+            @snapsstore = Array.new 
+            @personal_snaps = Array.new
+            @bodyframe.remove @body 
+            body "backup"     
+        end
+        return user_body
+    end
+
+    def body_backup 
         user_body = Gtk::Table.new 19, 6, false
         user_body.set_column_spacings 2 
 
@@ -515,10 +547,6 @@ class DobaDemo < Gtk::Window
                 directory.add_subfiles file 
             end
 
-            dir_view.signal_connect("row_activated") do |view, file, path|
-                puts "test" 
-            end 
-
             @snaps.signal_connect "changed" do
             
                 if @snaps.active_text == "New Snapshot"
@@ -569,6 +597,7 @@ class DobaDemo < Gtk::Window
                 end    
                 if gate == 1
                     if @snaps.active_text == "New Snapshot"
+                   
                         region_name = nil
                         snap_region = nil
                         @regionid_snaps.each do |s|
@@ -582,12 +611,20 @@ class DobaDemo < Gtk::Window
                                 Gtk::TreePath.new("#{dir_view.selection.selected}"))
                         iter = rowref.model.get_iter(rowref.path)
                         @s_name = @snapshot_name.text.gsub(/[^0-9a-z]/i,"")
-                        puts @user.create_backup @s_name, @new_snapshot_id, snap_region, region_name, iter[1]
-                        @snapsflag = 0
-                        @snapsstore = Array.new 
-                        @personal_snaps = Array.new
+                       
+                        @backing = 1 
+                        Thread.new{ backup_snap snap_region, region_name, iter[1]} 
+                        def backup_snap snap_region, region_name, iter
+                            puts "called create"
+                            @user.create_backup @s_name, @new_snapshot_id, snap_region, region_name, iter
+                            @backing = 0
+                        end
+
                         @bodyframe.remove @body 
-                        body "backup"     
+                        @body = body_backing 
+                        @bodyframe.add @body
+                        show_all
+                    
                     else
                         region_name = nil
                         snap_region = nil
@@ -616,19 +653,232 @@ class DobaDemo < Gtk::Window
                         iter = rowref.model.get_iter(rowref.path)
 
                         #call the creation option that suits the need of this case
-                        puts @user.update_backup @new_snap_name, @old_snap_id, snap_region, iter[1]
+                        #@user.update_backup @new_snap_name, @old_snap_id, snap_region, iter[1]
+                        
+                        @backing = 1 
+                        Thread.new{ update_backup snap_region, iter[1]} 
+                        def update_backup snap_region, iter
+                            @user.update_backup @new_snap_name, @old_snap_id, snap_region, iter
+                            @backing = 0
+                        end
 
-                        #refresh page after backup
                         @bodyframe.remove @body 
-                        body "backup"     
+                        @body = body_backing 
+                        @bodyframe.add @body
+                        show_all
                     end
                 end
             end 
-        
         end 
-        
         return user_body 
     end
+
+    def download_recover
+        user_body = Gtk::Table.new 19, 6, false
+        
+        waiting = Gtk::Image.new "imgs/recover.gif" 
+        user_body.attach waiting, 2, 4, 10, 11, Gtk::FILL, Gtk::SHRINK, 0, 0
+    
+        leftspace = Gtk::VBox.new
+        user_body.attach leftspace, 0, 2, 0, 19
+
+        rightspace = Gtk::VBox.new
+        user_body.attach rightspace, 4, 6, 0, 19
+        
+        Thread.new{ recover_download()} 
+        def recover_download 
+            while @dwnling == 1
+            end
+            @restoreflag = 0
+            @restorestore = Array.new 
+            @personal_restore = Array.new
+            @bodyframe.remove @body 
+            body "backup"     
+        end
+        return user_body
+    end
+
+    def body_recover_load
+        user_body = Gtk::Table.new 19, 6, false
+        
+        directory = @user.create_mntdir_view
+        dir_store = directory.return_model 
+        dir_view = directory.return_view 
+     
+        tree_dir = Gtk::HBox.new homogeneous = false, spacing = nil
+        scroll = Gtk::ScrolledWindow.new.add dir_view
+        tree_dir.pack_start_defaults scroll
+        user_body.attach tree_dir, 0, 3, 0, 19
+    
+        leftspace = Gtk::HBox.new
+        user_body.attach leftspace, 3, 4, 0, 19
+    
+        topspace = Gtk::HBox.new
+        user_body.attach topspace, 4, 5, 0, 7 
+           
+        dl = Gtk::Button.new "recover data"
+        user_body.attach dl, 4, 5, 7, 8, Gtk::FILL, Gtk::SHRINK, 0, 0
+
+        bottomspace = Gtk::HBox.new
+        user_body.attach bottomspace, 4, 5, 8, 19
+
+        rightspace = Gtk::HBox.new
+        user_body.attach rightspace, 5, 6, 0, 19
+        
+        dir_view.signal_connect("row_expanded") do |view, file, path|
+            directory.add_subfiles file 
+        end
+       
+        dl.signal_connect "clicked" do |w|
+            gate = 1
+            if !dir_view.selection.selected
+                puts "Please select a file or directory"
+                gate = 0
+            end
+            if gate == 1
+                rowref= Gtk::TreeRowReference.new(dir_store, 
+                        Gtk::TreePath.new("#{dir_view.selection.selected}"))
+                iter = rowref.model.get_iter(rowref.path)
+
+                @dwnling = 1 
+                Thread.new{ download iter[1]} 
+                def download iter
+                    @user.download_data @recover_server_id, iter
+                    @dwnling = 0
+                end
+
+                @bodyframe.remove @body 
+                @body = download_recover
+                @bodyframe.add @body
+                show_all
+            end
+        end
+        return user_body
+    end
+
+    def body_loading
+
+        user_body = Gtk::Table.new 19, 6, false
+        
+        waiting = Gtk::Image.new "imgs/recover.gif" 
+        user_body.attach waiting, 2, 4, 10, 11, Gtk::FILL, Gtk::SHRINK, 0, 0
+    
+        leftspace = Gtk::VBox.new
+        user_body.attach leftspace, 0, 2, 0, 19
+
+        rightspace = Gtk::VBox.new
+        user_body.attach rightspace, 4, 6, 0, 19
+                
+        Thread.new{ mount_wait}
+        def mount_wait 
+            while @loading == 1
+            end
+                
+            @bodyframe.remove @body 
+            @body = body_recover_load
+            @bodyframe.add @body
+            show_all
+        end 
+
+        return user_body
+    end
+
+    def body_restore
+        user_body = Gtk::Table.new 19, 6, false
+        user_body.set_column_spacings 2 
+
+        @restore_label = Gtk::Label.new "Snapshots"
+        user_body.attach @restore_label, 1, 5, 4, 5, Gtk::FILL, Gtk::SHRINK, 0, 0
+        @restore = Gtk::ComboBox.new
+        user_body.attach @restore, 1, 5, 5, 6, Gtk::FILL, Gtk::SHRINK, 0, 0
+        recover = Gtk::Button.new "Recover Data"
+        user_body.attach recover, 1, 5, 6, 7, Gtk::FILL, Gtk::SHRINK, 0, 0
+    
+        leftspace = Gtk::VBox.new
+        user_body.attach leftspace, 0, 1, 0, 19
+
+        rightspace = Gtk::VBox.new
+        user_body.attach rightspace, 5, 6, 0, 19
+    
+        if @restoreflag == 0 
+            Thread.new{ restore_snapshots()} 
+            @restoreflag = 1
+        else
+            store = Gtk::ListStore.new(String)
+            @restorestore.each_with_index do |e|
+                iter = store.append
+                iter[0] = e
+            end  
+            @restore.model = store
+        end
+    
+        def restore_snapshots
+            @personal_restore = Array.new
+            res = @user.print_images "my_images"
+            res["images"].each do |w|
+                if w["name"].include? "DOBA:"
+                    snap_name_array = Array.new
+                    snap_name_array = w["name"].split " "
+                    @restorestore << snap_name_array[1]
+                    @personal_restore << w
+                    @restore.append_text snap_name_array[1]
+                end
+            end
+        end
+        
+        recover.signal_connect "clicked" do |w|
+            gate = 1
+            if !@restore.active_text
+                puts "Please select a snapshot"
+                gate = 0 
+            end
+            if gate == 1
+                region_name = nil
+                restore_region = nil
+                restore_selected = @restore.active_text
+                @personal_restore.each do |restore|
+                    restore_name_array = Array.new
+                    restore_name_array = restore["name"].split " "
+                    if restore_name_array[1] == restore_selected 
+                        @old_restore_size = restore_name_array[3]
+                        @old_restore_id = restore["id"]
+                        regions = @user.print_regions 
+                        regions = regions["regions"]
+                        regions.each do |region|
+                            regs = region["name"]
+                            regs = regs.gsub(/\s+/,"")
+                            if restore_name_array[2] == regs
+                                restore_region = region["id"]     
+                            end 
+                        end
+                    end
+                end
+  
+                @loading = 1
+                Thread.new{ loading_dir( restore_region)}
+                def loading_dir restore_region
+                    @recover_server_id = @user.server_restore @old_restore_id, restore_region, @old_restore_size
+                    @loading = 0
+                end
+            
+                #create and return dir
+                #create restore button
+                #load restore page
+                    #rsync file to local restore folder
+                    #delete sever
+                #refresh recover page
+        
+                @bodyframe.remove @body 
+                @body = body_loading
+                @bodyframe.add @body
+                show_all
+        
+
+            end
+        end
+        return user_body
+    end
+
 end
 
 Gtk.init
